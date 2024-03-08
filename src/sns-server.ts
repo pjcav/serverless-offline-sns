@@ -80,9 +80,9 @@ export class SNSServer implements ISNSServer {
         const target = this.extractTarget(req.body);
         if (req.body.MessageStructure === "json") {
           const json = JSON.parse(req.body.Message);
-          if (typeof json.default !== "string") {
-            throw new Error("Messages must have default key");
-          }
+          // if (typeof json.default !== "string") {
+          //   throw new Error("Messages must have default key");
+          // }
         }
 
         res.send(
@@ -298,39 +298,18 @@ export class SNSServer implements ISNSServer {
     const sqsEndpoint = `${subEndpointUrl.protocol}//${subEndpointUrl.host}/`;
     const sqs = new SQSClient({ endpoint: sqsEndpoint, region: this.region });
 
-    if (sub["Attributes"]["RawMessageDelivery"] === "true") {
-      const sendMsgReq = new SendMessageCommand({
-        QueueUrl: sub.Endpoint,
-        MessageBody: event,
-        MessageAttributes: formatMessageAttributes(messageAttributes),
-        ...(messageGroupId && { MessageGroupId: messageGroupId }),
-      });
-      return new Promise<void>((resolve, reject) => {
-        sqs
-          .send(sendMsgReq).then(() => {
-            resolve();
-          });
-      });
-    } else {
-      const records = JSON.parse(event).Records ?? [];
-      const messagePromises = records.map((record) => {
-        const sendMsgReq = new SendMessageCommand({
-          QueueUrl: sub.Endpoint,
-          MessageBody: JSON.stringify(record.Sns),
-          MessageAttributes: formatMessageAttributes(messageAttributes),
-          ...(messageGroupId && { MessageGroupId: messageGroupId }),
+    const sendMsgReq = new SendMessageCommand({
+      QueueUrl: sub.Endpoint,
+      MessageBody: event,
+      MessageAttributes: formatMessageAttributes(messageAttributes),
+      ...(messageGroupId && { MessageGroupId: messageGroupId }),
+    });
+    return new Promise<void>((resolve, reject) => {
+      sqs
+        .send(sendMsgReq).then(() => {
+          resolve();
         });
-        return new Promise<void>((resolve, reject) => {
-          sqs
-            .send(sendMsgReq).then(() => {
-              resolve();
-            });
-        });
-      });
-      return new Promise<void>((resolve, reject) => {
-        Promise.all(messagePromises).then(() => resolve());
-      });
-    }
+    });
   }
 
   public publish(
@@ -380,7 +359,12 @@ export class SNSServer implements ISNSServer {
           }
           const protocol = sub.Protocol.toLowerCase();
           if (protocol === "http") {
-            return this.publishHttp(event, sub, isRaw);
+            return this.publishSqs(
+              event,
+              sub,
+              messageAttributes,
+              messageGroupId
+            );
           }
           if (protocol === "sqs") {
             return this.publishSqs(

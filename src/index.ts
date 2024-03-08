@@ -306,7 +306,7 @@ class ServerlessOfflineSns {
     const subs = await this.snsAdapter.listSubscriptions();
     this.debug("subs!: " + JSON.stringify(subs));
     await Promise.all(
-      subs.Subscriptions.filter(
+      (subs?.Subscriptions || []).filter(
         (sub) => sub.Endpoint.indexOf(":" + this.remotePort) > -1
       )
         .filter((sub) => sub.SubscriptionArn !== "PendingConfirmation")
